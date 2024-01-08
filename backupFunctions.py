@@ -82,6 +82,10 @@ def merakiBackup(dir, org, networks, dashboard, logger):
             operations.append(backupSwitchAcl(net=net, dir=dir, dashboard=dashboard, logger=logger))
             logger.info("Backing up MS Stack Settings settings...")
             operations.append(backupSwitchStacks(net=net, dir=dir, dashboard=dashboard, logger=logger))
+            logger.info("Backing up MS Switch Stack SVIs settings...")
+            operations.append(backupSwitchStackSvis(net=net, dir=dir, dashboard=dashboard, logger=logger))
+            logger.info("Backing up MS Switch Stack Static Route settings...")
+            operations.append(backupSwitchStackStaticRouting(net=net, dir=dir, dashboard=dashboard, logger=logger))
             logger.info("Backing up MS Port Schedules  settings...")
             operations.append(backupSwitchPortSchedules(net=net, dir=dir, dashboard=dashboard, logger=logger))
             logger.info("Backing up MS Access Policies  settings...")
@@ -1674,6 +1678,92 @@ def backupSwitchStacks(net, dir, dashboard, logger):
                   'w') as fp:
             json.dump(switch_stacks, fp)
             fp.close()
+        operation['status'] = "Complete"
+    except meraki.APIError as e:
+        logger.error(e)
+        operation['status'] = e
+    except Exception as e:
+        logger.error(e)
+        operation["status"]=e
+    return operation
+    
+def backupSwitchStackSvis(net, dir, dashboard, logger):
+    """
+    Back up Switch Stack SVI Settings
+    :param net: Network to get Stack Settings for
+    :param dir: Path to backup
+    :param dashboard: Meraki API Client
+    :return: operation: operation performed and its status
+    """
+    operation = {"network": net, "operation_type": "switch", "operation": "backupSwitchStackSvis", "status": ""}
+    try:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        if not os.path.exists(f'{dir}/network'):
+            os.makedirs(f'{dir}/network')
+        if not os.path.exists(f'{dir}/network/{net["name"]}'):
+            os.makedirs(f'{dir}/network/{net["name"]}')
+        if not os.path.exists(f'{dir}/network/{net["name"]}/stack'):
+            os.makedirs(f'{dir}/network/{net["name"]}/stack')
+        if not os.path.exists(f'{dir}/network/{net["name"]}/stack/stack_routing'):
+            os.makedirs(f'{dir}/network/{net["name"]}/stack/stack_routing')
+        # Get all switch Stack Settings
+        switch_stacks = dashboard.switch.getNetworkSwitchStacks(networkId=net['id'])
+        #Get SVI Interfaces for Switch Stacks
+        for switch_stack in switch_stacks:
+                svis = dashboard.switch.getNetworkSwitchStackRoutingInterfaces(networkId=net['id'],switchStackId=switch_stack['id'])
+                if not os.path.exists(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}'):
+                   os.makedirs(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}')
+                with open(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}/svis.json', 'w') as fp:
+                    json.dump(svis, fp)
+                    fp.close()
+                svi_dhcp = []
+                for svi in svis:
+                    dhcp = dashboard.switch.getNetworkSwitchStackRoutingInterfaceDhcp(networkId=net['id'],switchStackId=switch_stack['id'],interfaceId=svi['interfaceId'])
+                    dhcp['interfaceId'] = svi['interfaceId']
+                    svi_dhcp.append(dhcp)
+                with open(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}/svi_dhcp.json', 'w') as fp:
+                    json.dump(svi_dhcp, fp)
+                    fp.close()
+        operation['status'] = "Complete"
+    except meraki.APIError as e:
+        logger.error(e)
+        operation['status'] = e
+    except Exception as e:
+        logger.error(e)
+        operation["status"]=e
+    return operation
+
+def backupSwitchStackStaticRouting(net, dir, dashboard, logger):
+    """
+    Back up Switch Stack Static Routes
+    :param net: Network to get switch static routes for
+    :param dir: Path to backup
+    :param dashboard: Meraki API Client
+    :return: operation: operation performed and its status
+    """
+    operation = {"network": net, "operation_type": "switch", "operation": "backupSwitchStackStaticRouting", "status": ""}
+    try:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        if not os.path.exists(f'{dir}/network'):
+            os.makedirs(f'{dir}/network')
+        if not os.path.exists(f'{dir}/network/{net["name"]}'):
+            os.makedirs(f'{dir}/network/{net["name"]}')
+        if not os.path.exists(f'{dir}/network/{net["name"]}/stack'):
+            os.makedirs(f'{dir}/network/{net["name"]}/stack')
+        if not os.path.exists(f'{dir}/network/{net["name"]}/stack/stack_routing'):
+            os.makedirs(f'{dir}/network/{net["name"]}/stack/stack_routing')
+        #Get all switch stacks in network
+        switch_stacks = dashboard.switch.getNetworkSwitchStacks(networkId=net['id'])
+        # Get Static Routes For Switch Stacks
+        for switch_stack in switch_stacks:
+                static_routes = dashboard.switch.getNetworkSwitchStackRoutingStaticRoutes(networkId=net['id'],switchStackId=switch_stack['id'])
+                if not os.path.exists(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}'):
+                    os.makedirs(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}')
+                with open(f'{dir}/network/{net["name"]}/stack/stack_routing/{switch_stack["name"]}/stack_static_routes.json', 'w') as fp:
+                    json.dump(static_routes, fp)
+                    fp.close()
         operation['status'] = "Complete"
     except meraki.APIError as e:
         logger.error(e)
